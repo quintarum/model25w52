@@ -1,62 +1,45 @@
 <!doctype html>
 <html lang="ru">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="icon" href="data:,">
-  <title>Hopf fibration → anti-isoclinic shear → collapse</title>
+  <title>S³ = два полнотория + Хопф + анти-изоклинный “отжим”</title>
+
   <script type="importmap">
     {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-        }
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
     }
   </script>
+
   <style>
-    html,
-    body {
-      height: 100%;
-      margin: 0;
-      background: #0b0d12;
-      overflow: hidden;
-    }
-
-    #hud {
-      position: fixed;
-      left: 12px;
-      bottom: 12px;
-      right: 12px;
+    html, body { height: 100%; margin: 0; background: #0b0d12; overflow: hidden; }
+    #hud{
+      position: fixed; left: 12px; bottom: 12px; right: 12px;
       font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: rgba(255, 255, 255, .78);
+      color: rgba(255,255,255,.78);
       pointer-events: none;
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
+      display: flex; gap: 10px; flex-wrap: wrap;
     }
-
-    #hud .pill {
-      pointer-events: none;
+    #hud .pill{
       padding: 8px 10px;
-      border: 1px solid rgba(255, 255, 255, .12);
+      border: 1px solid rgba(255,255,255,.12);
       border-radius: 999px;
-      background: rgba(255, 255, 255, .06);
+      background: rgba(255,255,255,.06);
       backdrop-filter: blur(8px);
       white-space: nowrap;
-    }
-
-    a {
-      color: rgba(170, 220, 255, .9);
     }
   </style>
 </head>
 
 <body>
 <div id="hud">
-  <div class="pill">S³ (C²) → стереографическая проекция → R³</div>
-  <div class="pill">t = «отжим»: 0 = Хопф, ~0.7 = “взрыв”, 1 = “две иглы”</div>
-  <div class="pill">Колёсико мыши — зум, ЛКМ — вращение</div>
+  <div class="pill">S³ = (D²×S¹) ∪ (D²×S¹) — два полнотория, склейка по тору</div>
+  <div class="pill">Хопф через стереопроекцию S³→R³ (видим волокна как окружности/дуги)</div>
+  <div class="pill">t: 0 = ровно, ~0.7 = “напряжение”, 1 = “pinch” к ядрам полноториев</div>
 </div>
 
 <script type="module">
@@ -64,261 +47,307 @@
   import { OrbitControls } from "three/addons/controls/OrbitControls.js";
   import { GUI } from "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm";
 
-  // ---------- Math helpers (C^2 on S^3) ----------
-  // A point on S^3 ⊂ C^2 represented as (z1, z2), z = a + i b
-  function c(re, im) { return { re, im }; }
-  function cMul(u, v) { return c(u.re * v.re - u.im * v.im, u.re * v.im + u.im * v.re); }
-  function cAdd(u, v) { return c(u.re + v.re, u.im + v.im); }
-  function cAbs2(u) { return u.re * u.re + u.im * u.im; }
-  function cExpI(theta) { return c(Math.cos(theta), Math.sin(theta)); }
+  // -------------------- Complex helpers --------------------
+  function c(re, im){ return {re, im}; }
+  function cMul(u,v){ return c(u.re*v.re - u.im*v.im, u.re*v.im + u.im*v.re); }
+  function cAdd(u,v){ return c(u.re+v.re, u.im+v.im); }
+  function cAbs2(u){ return u.re*u.re + u.im*u.im; }
+  function cExpI(t){ return c(Math.cos(t), Math.sin(t)); }
 
-  // Normalize (z1,z2) back onto S^3
-  function normalizeS3(z1, z2) {
-    const s = Math.sqrt(cAbs2(z1) + cAbs2(z2));
-    return [c(z1.re / s, z1.im / s), c(z2.re / s, z2.im / s)];
+  function normalizeS3(z1,z2){
+    const s = Math.sqrt(cAbs2(z1)+cAbs2(z2));
+    return [c(z1.re/s, z1.im/s), c(z2.re/s, z2.im/s)];
   }
 
-  // Hopf fiber generator:
-  // pick basepoint on S^2 via two angles (eta, xi):
-  // z1 = cos(eta) e^{i xi}, z2 = sin(eta)  (phase 0)
-  // then fiber: (e^{iθ} z1, e^{iθ} z2)
-  function fiberPoint(eta, xi, theta) {
-    const z1 = cMul(c(Math.cos(eta), 0), cExpI(xi));   // cos(eta) * e^{i xi}
-    const z2 = c(Math.sin(eta), 0);                   // sin(eta)
-    const e = cExpI(theta);
-    return [cMul(e, z1), cMul(e, z2)];
+  // Hopf fiber point on S^3 ⊂ C^2
+  // Basepoint on S^2 (eta, xi), then fiber parameter theta
+  function fiberPoint(eta, xi, theta){
+    const z1 = cMul(c(Math.cos(eta),0), cExpI(xi));
+    const z2 = c(Math.sin(eta),0);
+    const e  = cExpI(theta);
+    return [cMul(e,z1), cMul(e,z2)];
   }
 
-  // "Anti-isoclinic rotation" toy: rotate z1 by +a, z2 by -a
-  function antiIsoclinic(z1, z2, a) {
-    return [cMul(cExpI(a), z1), cMul(cExpI(-a), z2)];
+  // Anti-isoclinic rotation: (z1,z2) -> (e^{ia} z1, e^{-ia} z2)
+  function antiIsoclinic(z1,z2,a){
+    return [cMul(cExpI(a),z1), cMul(cExpI(-a),z2)];
   }
 
-  // "Shear" deformation (non-isometric): z1 <- z1 + k*z2 then renormalize
-  // This is the part that makes circles look like ellipses / “trение” in projection.
-  function shearDeform(z1, z2, k) {
-    const z1p = cAdd(z1, cMul(c(k, 0), z2));
-    return normalizeS3(z1p, z2);
+  // Shear-like non-isometry: z1 <- z1 + k z2 then renormalize
+  function shearDeform(z1,z2,k){
+    const z1p = cAdd(z1, cMul(c(k,0), z2));
+    return normalizeS3(z1p,z2);
   }
 
-  // Stereographic projection S^3 -> R^3 from north pole (0,0,0,1)
-  // Using real coords: z1 = x + i y, z2 = u + i v, so point in R^4 is (x,y,u,v).
-  // Project: (X,Y,Z) = (x,y,u) / (1 - v)
-  // (v close to 1 -> explosion)
-  function stereographic(z1, z2) {
+  // Stereographic projection from north pole v=Im(z2)=1
+  function stereographic(z1,z2){
     const x = z1.re, y = z1.im, u = z2.re, v = z2.im;
     const denom = 1 - v;
-    // If denom is tiny, we let it blow up; clamp later for rendering stability.
-    return new THREE.Vector3(x / denom, y / denom, u / denom);
+    return new THREE.Vector3(x/denom, y/denom, u/denom);
   }
 
-  // ---------- Three.js scene ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  function smoothstep(a,b,x){
+    const t = Math.max(0, Math.min(1, (x-a)/(b-a)));
+    return t*t*(3-2*t);
+  }
+
+  // -------------------- Scene --------------------
+  const renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x0b0d12, 0.065);
+  scene.fog = new THREE.FogExp2(0x0b0d12, 0.06);
 
-  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 250);
-  camera.position.set(0, 0, 12);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 300);
+  camera.position.set(0, 0, 14);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
 
-  // Soft lights
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 0.8);
-  key.position.set(3, 6, 4);
+  const key = new THREE.DirectionalLight(0xffffff, 0.85);
+  key.position.set(4, 7, 5);
   scene.add(key);
 
-  // Axes-ish reference
-  const grid = new THREE.GridHelper(30, 30, 0x223344, 0x112233);
-  grid.position.y = -6;
+  const grid = new THREE.GridHelper(40, 40, 0x223344, 0x112233);
+  grid.position.y = -7;
   grid.material.transparent = true;
-  grid.material.opacity = 0.25;
+  grid.material.opacity = 0.22;
   scene.add(grid);
 
-  // "Two needles" (singular axes) — visual metaphor
-  const needleMat = new THREE.LineBasicMaterial({ color: 0x88aaff, transparent: true, opacity: 0.7 });
-  function makeNeedle(dir) {
-    const pts = [];
-    const L = 120;
-    pts.push(new THREE.Vector3(-dir.x * L, -dir.y * L, -dir.z * L));
-    pts.push(new THREE.Vector3(dir.x * L, dir.y * L, dir.z * L));
-    const geom = new THREE.BufferGeometry().setFromPoints(pts);
-    return new THREE.Line(geom, needleMat);
-  }
-  const needle1 = makeNeedle(new THREE.Vector3(1, 0, 0).normalize());
-  const needle2 = makeNeedle(new THREE.Vector3(0, 0, 1).normalize());
-  needle1.visible = true;
-  needle2.visible = true;
-  scene.add(needle1, needle2);
+  // -------------------- Heegaard splitting visualization --------------------
+  // We visualize the two solid tori (D^2×S^1) as standard 3D solid-torus volumes.
+  // This is NOT an embedding of S^3 in R^3 (невозможно), но это честная картинка разложения:
+  // "два полнотория, склеенные по границе-тору".
 
-  // ---------- Fibers geometry ----------
+  const splittingGroup = new THREE.Group();
+  scene.add(splittingGroup);
+
+  const torusA = new THREE.Mesh(
+    new THREE.TorusGeometry(3.6, 1.25, 32, 160),
+    new THREE.MeshStandardMaterial({
+      color: 0x66ccff,
+      transparent: true,
+      opacity: 0.18,
+      roughness: 0.35,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    })
+  );
+
+  const torusB = new THREE.Mesh(
+    new THREE.TorusGeometry(3.6, 1.25, 32, 160),
+    new THREE.MeshStandardMaterial({
+      color: 0xff88cc,
+      transparent: true,
+      opacity: 0.18,
+      roughness: 0.35,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    })
+  );
+
+  // To suggest "gluing with meridian/longitude swap", we rotate the second torus.
+  torusB.rotation.y = Math.PI/2;
+
+  splittingGroup.add(torusA, torusB);
+
+  // Clifford torus (boundary) as a wireframe ring: |z1|=|z2| => eta = pi/4.
+  const cliffordWire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(new THREE.TorusGeometry(3.6, 1.25, 18, 90)),
+    new THREE.LineBasicMaterial({color: 0xffffff, transparent:true, opacity:0.25})
+  );
+  splittingGroup.add(cliffordWire);
+
+  // "Core circles" of the two solid tori (their central S^1)
+  function makeCoreCircle(axis, radius){
+    const pts = [];
+    const N = 256;
+    for (let i=0;i<=N;i++){
+      const t = (i/N)*Math.PI*2;
+      // circle in plane orthogonal to axis:
+      // We'll just pick two perpendicular vectors by hand for x and z cores.
+      let p;
+      if (axis === "x") p = new THREE.Vector3(0, Math.cos(t)*radius, Math.sin(t)*radius);
+      else if (axis === "z") p = new THREE.Vector3(Math.cos(t)*radius, Math.sin(t)*radius, 0);
+      else p = new THREE.Vector3(Math.cos(t)*radius, 0, Math.sin(t)*radius);
+      pts.push(p);
+    }
+    return new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({color:0xffffff, transparent:true, opacity:0.55})
+    );
+  }
+  const coreA = makeCoreCircle("z", 3.6); // core circle for torusA orientation
+  const coreB = makeCoreCircle("x", 3.6); // core circle for torusB orientation
+  splittingGroup.add(coreA, coreB);
+
+  // -------------------- Hopf fibers --------------------
   const fibersGroup = new THREE.Group();
   scene.add(fibersGroup);
 
-  function buildFiberLines(params) {
+  function buildFiberLines(params){
     fibersGroup.clear();
 
-    const {
-      fibers, segments, radiusClamp,
-      t, antiAngle, twist, showCliffordOnly
-    } = params;
+    const {fibers, segments, radiusClamp, t, antiAngle, twist, showCliffordOnly} = params;
 
-    // Sample basepoints. If showCliffordOnly => eta ~ pi/4 (Clifford torus belt)
+    // basepoints sampling
     const etas = [];
-    const xis = [];
-    for (let i = 0; i < fibers; i++) {
-      const s = (i + 0.5) / fibers;
-
+    const xis  = [];
+    for (let i=0;i<fibers;i++){
+      const s = (i+0.5)/fibers;
       let eta;
-      if (showCliffordOnly) {
-        // Narrow band around pi/4
+      if (showCliffordOnly){
         const band = 0.22;
-        eta = Math.PI / 4 + (s - 0.5) * band;
+        eta = Math.PI/4 + (s-0.5)*band;
       } else {
-        eta = s * (Math.PI / 2);
+        eta = s*(Math.PI/2);
       }
       etas.push(eta);
 
-      // Spread xi quasi-uniformly
-      const xi = (i * 2.399963229728653); // golden angle
+      const xi = i * 2.399963229728653; // golden angle
       xis.push(xi);
     }
 
-    // Convert "t" to a shear strength that goes singular near 1
-    // k(t) ~ tan(pi/2 * t) but we soften it to avoid infinity.
     const eps = 1e-3;
-    const kRaw = Math.tan((Math.PI / 2) * Math.min(1 - eps, t));
-    const k = 0.55 * kRaw;
+    const kRaw = Math.tan((Math.PI/2) * Math.min(1-eps, t));
+    const k = 0.40 * kRaw;
 
-    // Anti-isoclinic angle can also ramp with t if desired
-    const a = antiAngle + 0.35 * t;
+    const a = antiAngle + 0.35*t;
+    const wobble = 0.22 * twist;
+    const chaos = smoothstep(0.45, 0.82, t);
 
-    // Add “phase turbulence” by modulating theta steps (purely visual drama)
-    const wobble = 0.18 * twist;
+    const baseMat = new THREE.LineBasicMaterial({color: 0xffffff, transparent:true, opacity:0.5});
 
-    // Line material
-    const mat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.50
-    });
-
-    // For each fiber, compute polyline points
-    for (let i = 0; i < fibers; i++) {
-      const eta = etas[i];
-      const xi = xis[i];
-
+    for (let i=0;i<fibers;i++){
+      const eta = etas[i], xi = xis[i];
       const pts = [];
-      for (let j = 0; j <= segments; j++) {
-        const u = j / segments;
-        // Base fiber parameter
-        let theta = u * Math.PI * 2;
 
-        // Visual “ergodic-ish” phase chaos as t approaches ~0.7
-        const chaos = smoothstep(0.45, 0.82, t);
-        theta += chaos * wobble * Math.sin(9 * theta + 7 * xi);
+      for (let j=0;j<=segments;j++){
+        const u = j/segments;
+        let theta = u*Math.PI*2;
 
-        // Hopf fiber point on S^3 in C^2
-        let [z1, z2] = fiberPoint(eta, xi, theta);
+        theta += chaos * wobble * Math.sin(9*theta + 7*xi);
 
-        // Apply anti-isoclinic toy
-        [z1, z2] = antiIsoclinic(z1, z2, a);
+        let [z1,z2] = fiberPoint(eta, xi, theta);
 
-        // Apply non-isometric shear that “kills conformality”
-        if (t > 0) {
-          [z1, z2] = shearDeform(z1, z2, k);
-        }
+        [z1,z2] = antiIsoclinic(z1,z2,a);
+        if (t>0) [z1,z2] = shearDeform(z1,z2,k);
 
-        // Stereographic projection to R^3
-        const p = stereographic(z1, z2);
+        let p = stereographic(z1,z2);
 
-        // “Explosion”: points that fly too far get clamped, making streaky “white-out”
+        // Explosion clamp
         const r = p.length();
-        if (r > radiusClamp) {
-          p.multiplyScalar(radiusClamp / r);
-        }
+        if (r > radiusClamp) p.multiplyScalar(radiusClamp/r);
 
-        // “Collapse to two needles”: blend toward two axes as t -> 1
-        const collapse = smoothstep(0.82, 0.999, t);
-        if (collapse > 0) {
-          // Choose which needle based on sign of x in S^3-ish proxy
-          // (dirty, but it creates the “two camps” effect)
-          const choose = (z1.re >= 0) ? 0 : 1;
-          const dir = choose === 0 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
-          const along = p.dot(dir);
-          const target = dir.clone().multiplyScalar(along);
-          p.lerp(target, collapse);
+        // "Pinch toward cores" near the end:
+        // as t->1, points drift toward one of two core circles (solid-tori cores)
+        const pinch = smoothstep(0.80, 0.999, t);
+        if (pinch > 0){
+          // Decide membership by comparing |z1| and |z2|:
+          // |z1|>=|z2| → torusA, else torusB (this matches two solid tori decomposition idea)
+          const inA = (cAbs2(z1) >= cAbs2(z2));
+
+          // Project p onto a circle of radius 3.6 around an axis.
+          // For torusA use z-axis core, for torusB use x-axis core.
+          let target;
+          if (inA){
+            const ang = Math.atan2(p.y, p.x);
+            target = new THREE.Vector3(Math.cos(ang)*3.6, Math.sin(ang)*3.6, 0);
+          } else {
+            const ang = Math.atan2(p.y, p.z);
+            target = new THREE.Vector3(0, Math.cos(ang)*3.6, Math.sin(ang)*3.6);
+          }
+
+          // Blend to target
+          p.lerp(target, pinch);
         }
 
         pts.push(p);
       }
 
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geom, mat);
-
-      // Slight per-line opacity variation for depth
-      line.material = mat.clone();
-      line.material.opacity = 0.22 + 0.55 * (i / fibers);
+      const line = new THREE.Line(geom, baseMat.clone());
+      line.material.opacity = 0.18 + 0.55*(i/fibers);
       fibersGroup.add(line);
     }
   }
 
-  function smoothstep(a, b, x) {
-    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
-    return t * t * (3 - 2 * t);
-  }
-
-  // ---------- Parameters & GUI ----------
+  // -------------------- Params & GUI --------------------
   const params = {
-    t: 0.00,
-    fibers: 120,
-    segments: 160,
-    radiusClamp: 18,
+    t: 0.0,
+    fibers: 140,
+    segments: 170,
+    radiusClamp: 22,
     antiAngle: 0.0,
     twist: 0.0,
     showCliffordOnly: true,
+
+    showFibers: true,
+    showSplit: true,
+    splitMode: "both", // both | A | B | boundary
     spin: true,
     spinSpeed: 0.25
   };
 
-  const gui = new GUI({ title: "Реализация РТ в топологии" });
+  const gui = new GUI({ title: "S³: два полнотория + Хопф" });
+
   gui.add(params, "t", 0, 1, 0.001).name("отжим t").onChange(rebuild);
   gui.add(params, "antiAngle", -Math.PI, Math.PI, 0.001).name("anti-angle").onChange(rebuild);
   gui.add(params, "twist", 0, 2, 0.001).name("хаос/эргодика").onChange(rebuild);
-  gui.add(params, "fibers", 20, 260, 1).name("нитей").onChange(rebuild);
-  gui.add(params, "segments", 40, 320, 1).name("сегментов").onChange(rebuild);
-  gui.add(params, "radiusClamp", 6, 40, 0.1).name("кламп взрыва").onChange(rebuild);
+
+  gui.add(params, "fibers", 30, 260, 1).name("нитей").onChange(rebuild);
+  gui.add(params, "segments", 60, 320, 1).name("сегментов").onChange(rebuild);
+  gui.add(params, "radiusClamp", 8, 45, 0.1).name("кламп взрыва").onChange(rebuild);
+
   gui.add(params, "showCliffordOnly").name("пояс Клиффорда").onChange(rebuild);
+
+  gui.add(params, "showFibers").name("показать волокна").onChange(rebuild);
+  gui.add(params, "showSplit").name("показать 2 тора").onChange(rebuild);
+  gui.add(params, "splitMode", ["both","A","B","boundary"]).name("split mode").onChange(rebuild);
+
   gui.add(params, "spin").name("авто-вращение");
   gui.add(params, "spinSpeed", 0, 2, 0.01).name("скорость");
 
-  function rebuild() {
-    buildFiberLines(params);
+  function rebuild(){
+    // Split visuals
+    splittingGroup.visible = params.showSplit;
 
-    // Needles visibility ramps up near the end (мораль: всё тлен)
-    const needleOpacity = smoothstep(0.75, 1.0, params.t);
-    needle1.material.opacity = 0.08 + 0.85 * needleOpacity;
-    needle2.material.opacity = 0.08 + 0.85 * needleOpacity;
+    torusA.visible = (params.splitMode === "both" || params.splitMode === "A" || params.splitMode === "boundary");
+    torusB.visible = (params.splitMode === "both" || params.splitMode === "B" || params.splitMode === "boundary");
+
+    // boundary emphasis
+    const boundaryOnly = (params.splitMode === "boundary");
+    torusA.material.opacity = boundaryOnly ? 0.06 : 0.18;
+    torusB.material.opacity = boundaryOnly ? 0.06 : 0.18;
+    cliffordWire.material.opacity = boundaryOnly ? 0.50 : 0.25;
+
+    coreA.visible = !boundaryOnly;
+    coreB.visible = !boundaryOnly;
+
+    // Fibers
+    fibersGroup.visible = params.showFibers;
+    if (params.showFibers) buildFiberLines(params);
   }
 
   rebuild();
 
-  // ---------- Animate ----------
+  // -------------------- Animate --------------------
   let tPrev = performance.now();
-  function animate(now) {
+  function animate(now){
     requestAnimationFrame(animate);
-    const dt = Math.min(0.05, (now - tPrev) / 1000);
+    const dt = Math.min(0.05, (now - tPrev)/1000);
     tPrev = now;
 
-    if (params.spin) {
+    if (params.spin){
       fibersGroup.rotation.y += dt * params.spinSpeed * 0.35;
       fibersGroup.rotation.x += dt * params.spinSpeed * 0.12;
+
+      splittingGroup.rotation.y += dt * params.spinSpeed * 0.12;
+      splittingGroup.rotation.x += dt * params.spinSpeed * 0.05;
     }
 
     controls.update();
@@ -327,18 +356,17 @@
   requestAnimationFrame(animate);
 
   addEventListener("resize", () => {
-    camera.aspect = innerWidth / innerHeight;
+    camera.aspect = innerWidth/innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // Quick keys
   addEventListener("keydown", (e) => {
-    if (e.key === " ") {
+    if (e.key === " "){
       params.spin = !params.spin;
       gui.controllersRecursive().forEach(c => c.updateDisplay?.());
     }
-    if (e.key.toLowerCase() === "r") {
+    if (e.key.toLowerCase() === "r"){
       params.t = 0; params.antiAngle = 0; params.twist = 0;
       rebuild();
       gui.controllersRecursive().forEach(c => c.updateDisplay?.());
@@ -346,5 +374,4 @@
   });
 </script>
 </body>
-
 </html>
